@@ -1,8 +1,19 @@
-pub fn load_dict<F>(action: F) where F: Fn(char, Vec<&str>) {
-    let dict_str = include_str!("dict.txt");
-    dict_str.lines().for_each(|line| {
-        let ch = line.chars().next().unwrap();
-        let records = line[3..].split(", ").collect::<Vec<&str>>();
-        action(ch, records);
-    });
+use std::collections::HashMap;
+use unicode_segmentation::UnicodeSegmentation;
+
+pub trait DictLoader<'a> {
+    fn load_dict(&self) -> HashMap<char, Vec<&'a str>>;
+}
+
+impl<'a> DictLoader<'a> for &'a str {
+    fn load_dict(&self) -> HashMap<char, Vec<&'a str>> {
+        self.lines()
+            .map(|line: &str| {
+                let ch = line.chars().next().unwrap();
+                let index = line.grapheme_indices(true).nth(3).unwrap().0;
+                let records = line[index..].split(", ").collect::<Vec<&str>>();
+                (ch, records)
+            })
+            .collect()
+    }
 }

@@ -1,7 +1,7 @@
-use std::collections::HashSet;
 use crate::accelerator::Accelerator;
 use crate::compressed::Compressor;
 use crate::pinin::PinIn;
+use std::collections::HashSet;
 
 pub struct SimpleSearcher<'a, T> {
     context: &'a PinIn<'a>,
@@ -15,7 +15,9 @@ pub struct SimpleSearcher<'a, T> {
 impl<'a, T> SimpleSearcher<'a, T> {
     pub fn insert(&mut self, name: &str, id: T) {
         self.compressor.push(name);
-        name.chars().for_each(|c| { self.context.get_character(c); });
+        name.chars().for_each(|c| {
+            self.context.get_character(c);
+        });
 
         self.objects.push(id);
     }
@@ -23,9 +25,10 @@ impl<'a, T> SimpleSearcher<'a, T> {
     pub fn search(&mut self, name: &str) -> Vec<&T> {
         self.accelerator.search(name);
         let offsets = &self.compressor.offsets;
-        offsets.iter()
+        offsets
+            .iter()
             .enumerate()
-            .filter(|(i, s)| { self.logic.test_accelerator(&self.accelerator, 0, **s)})
+            .filter(|(_i, s)| self.logic.test_accelerator(&self.accelerator, 0, **s))
             .map(|(i, _)| &self.objects[i])
             .collect()
     }
@@ -37,16 +40,20 @@ impl<'a, T> SimpleSearcher<'a, T> {
 
 const BTREE_THRESHOLD: usize = 256;
 
-pub struct TreeSearcher {
-
-}
+pub struct TreeSearcher {}
 
 pub struct NDense {
-    data: Vec<usize>
+    data: Vec<usize>,
 }
 
 impl NDense {
-    pub fn get_accelerator(&self, logic: &SearcherLogic, accelerator: &Accelerator, offset: usize, collection: &mut HashSet<usize>) {
+    pub fn get_accelerator(
+        &self,
+        logic: &SearcherLogic,
+        accelerator: &Accelerator,
+        offset: usize,
+        collection: &mut HashSet<usize>,
+    ) {
         let full = logic == &SearcherLogic::Equal;
         if !full && accelerator.search_string.len() == offset {
             self.get(collection);
@@ -65,42 +72,29 @@ impl NDense {
             collection.insert(self.data[i * 2 + 1]);
         }
     }
-
 }
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone)]
 pub enum SearcherLogic {
     Begin,
     Contain,
-    Equal
+    Equal,
 }
 
 impl SearcherLogic {
     pub fn test_accelerator(&self, a: &Accelerator, offset: usize, start: usize) -> bool {
         match *self {
-            SearcherLogic::Begin => {
-                a.begins(offset, start)
-            }
-            SearcherLogic::Contain => {
-                a.contains(offset, start)
-            }
-            SearcherLogic::Equal => {
-                a.matches(offset, start)
-            }
+            SearcherLogic::Begin => a.begins(offset, start),
+            SearcherLogic::Contain => a.contains(offset, start),
+            SearcherLogic::Equal => a.matches(offset, start),
         }
     }
 
     pub fn test_pinyin(&self, p: &PinIn, s1: &str, s2: &str) -> bool {
         match *self {
-            SearcherLogic::Begin => {
-                p.begins(s1, s2)
-            }
-            SearcherLogic::Contain => {
-                p.contains(s1, s2)
-            }
-            SearcherLogic::Equal => {
-                p.matches(s1, s2)
-            }
+            SearcherLogic::Begin => p.begins(s1, s2),
+            SearcherLogic::Contain => p.contains(s1, s2),
+            SearcherLogic::Equal => p.matches(s1, s2),
         }
     }
 }

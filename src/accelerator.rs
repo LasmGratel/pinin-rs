@@ -1,17 +1,17 @@
-use std::cell::{Cell, RefCell};
-use std::ops::Index;
-use std::rc::Rc;
 use crate::compressed::{IndexSet, IndexSetStorage};
 use crate::elements::Pinyin;
 use crate::pinin::PinIn;
+use std::cell::{Cell, RefCell};
+use std::ops::Index;
+use std::rc::Rc;
 
-pub trait CharProvider : Index<usize, Output = char>{
+pub trait CharProvider: Index<usize, Output = char> {
     fn end(&self, index: usize) -> bool;
 }
 
 #[derive(Default)]
 pub struct StringProvider {
-    s: Vec<char>
+    s: Vec<char>,
 }
 
 impl Index<usize> for StringProvider {
@@ -25,7 +25,7 @@ impl Index<usize> for StringProvider {
 impl From<&str> for StringProvider {
     fn from(s: &str) -> Self {
         StringProvider {
-            s: s.chars().collect()
+            s: s.chars().collect(),
         }
     }
 }
@@ -53,7 +53,7 @@ impl Accelerator {
             search_chars: vec![],
             search_string: "".to_string(),
             provider: None,
-            partial: Cell::new(false)
+            partial: Cell::new(false),
         }
     }
 
@@ -125,8 +125,14 @@ impl Accelerator {
 
     pub fn get(&self, context: &PinIn, ch: char, offset: usize) -> IndexSet {
         let c = context.get_character(ch);
-        let mut ret = if self.search_chars[offset] == c.ch { IndexSet::one() } else { IndexSet::none() };
-        c.pinyin.iter().for_each(|x| ret.merge(self.get_pinyin(x, offset)));
+        let mut ret = if self.search_chars[offset] == c.ch {
+            IndexSet::one()
+        } else {
+            IndexSet::none()
+        };
+        c.pinyin
+            .iter()
+            .for_each(|x| ret.merge(self.get_pinyin(x, offset)));
         ret
     }
 
@@ -160,6 +166,3 @@ impl Accelerator {
         false
     }
 }
-
-
-

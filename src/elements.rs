@@ -1,17 +1,26 @@
 use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::HashSet;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use unicode_segmentation::UnicodeSegmentation;
+use std::rc::Rc;
+
 use crate::compressed::IndexSet;
-use crate::keyboard::{Keyboard, KEYBOARD_QUANPIN};
-use crate::pinin::{FuzzySettings, PinIn};
+use crate::keyboard::Keyboard;
+use crate::pinin::FuzzySettings;
+use crate::unicode_utils::SegmentedStr;
 
 const VOWEL_CHARS: [char; 6] = ['a', 'e', 'i', 'o', 'u', 'v'];
 
-#[derive(Debug, Hash, PartialEq)]
+#[derive(Hash, PartialEq, Clone)]
 pub struct Phoneme<'a> {
-    strings: Vec<Cow<'a, str>>
+    strings: Vec<Cow<'a, str>>,
+}
+
+impl Debug for Phoneme<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.strings.iter()).finish()
+    }
 }
 
 impl<'a> Phoneme<'a> {
@@ -21,43 +30,53 @@ impl<'a> Phoneme<'a> {
 
         if let Some(c) = s.chars().next() {
             match c {
-                'c' => if settings.ch2c {
-                    ret.insert(Cow::Borrowed("c"));
-                    ret.insert(Cow::Borrowed("ch"));
-                },
-                's' => if settings.sh2s {
-                    ret.insert(Cow::Borrowed("s"));
-                    ret.insert(Cow::Borrowed("sh"));
+                'c' => {
+                    if settings.ch2c {
+                        ret.insert(Cow::Borrowed("c"));
+                        ret.insert(Cow::Borrowed("ch"));
+                    }
                 }
-                'z' => if settings.zh2z {
-                    ret.insert(Cow::Borrowed("z"));
-                    ret.insert(Cow::Borrowed("zh"));
+                's' => {
+                    if settings.sh2s {
+                        ret.insert(Cow::Borrowed("s"));
+                        ret.insert(Cow::Borrowed("sh"));
+                    }
                 }
-                'v' => if settings.u2v {
-                    let mut str = String::from("u");
-                    str.push_str(&s[1..s.len()]);
-                    ret.insert(Cow::Owned(str));
+                'z' => {
+                    if settings.zh2z {
+                        ret.insert(Cow::Borrowed("z"));
+                        ret.insert(Cow::Borrowed("zh"));
+                    }
+                }
+                'v' => {
+                    if settings.u2v {
+                        let mut str = String::from("u");
+                        str.push_str(&s[1..s.len()]);
+                        ret.insert(Cow::Owned(str));
+                    }
                 }
                 _ => {}
             }
         }
 
-        if (settings.ang2an && s.ends_with("ang")) ||
-            (settings.eng2en && s.ends_with("eng")) ||
-            (settings.ing2in && s.ends_with("ing")) {
+        if (settings.ang2an && s.ends_with("ang"))
+            || (settings.eng2en && s.ends_with("eng"))
+            || (settings.ing2in && s.ends_with("ing"))
+        {
             ret.insert(Cow::Borrowed(&s[0..s.len() - 1]));
         }
 
-        if (settings.ang2an && s.ends_with("an")) ||
-            (settings.eng2en && s.ends_with("en")) ||
-            (settings.ing2in && s.ends_with("in")) {
+        if (settings.ang2an && s.ends_with("an"))
+            || (settings.eng2en && s.ends_with("en"))
+            || (settings.ing2in && s.ends_with("in"))
+        {
             let mut str = s.to_string();
             str.push('g');
             ret.insert(Cow::Owned(str));
         }
 
         Phoneme {
-            strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect()
+            strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect(),
         }
     }
 
@@ -67,68 +86,82 @@ impl<'a> Phoneme<'a> {
 
         if let Some(c) = s.chars().next() {
             match c {
-                'c' => if settings.ch2c {
-                    ret.insert(Cow::Borrowed("c"));
-                    ret.insert(Cow::Borrowed("ch"));
-                },
-                's' => if settings.sh2s {
-                    ret.insert(Cow::Borrowed("s"));
-                    ret.insert(Cow::Borrowed("sh"));
+                'c' => {
+                    if settings.ch2c {
+                        ret.insert(Cow::Borrowed("c"));
+                        ret.insert(Cow::Borrowed("ch"));
+                    }
                 }
-                'z' => if settings.zh2z {
-                    ret.insert(Cow::Borrowed("z"));
-                    ret.insert(Cow::Borrowed("zh"));
+                's' => {
+                    if settings.sh2s {
+                        ret.insert(Cow::Borrowed("s"));
+                        ret.insert(Cow::Borrowed("sh"));
+                    }
                 }
-                'v' => if settings.u2v {
-                    let mut str = String::from("u");
-                    str.push_str(&s[1..s.len()]);
-                    ret.insert(Cow::Owned(str));
+                'z' => {
+                    if settings.zh2z {
+                        ret.insert(Cow::Borrowed("z"));
+                        ret.insert(Cow::Borrowed("zh"));
+                    }
+                }
+                'v' => {
+                    if settings.u2v {
+                        let mut str = String::from("u");
+                        str.push_str(&s[1..s.len()]);
+                        ret.insert(Cow::Owned(str));
+                    }
                 }
                 _ => {}
             }
         }
 
-        if (settings.ang2an && s.ends_with("ang")) ||
-            (settings.eng2en && s.ends_with("eng")) ||
-            (settings.ing2in && s.ends_with("ing")) {
+        if (settings.ang2an && s.ends_with("ang"))
+            || (settings.eng2en && s.ends_with("eng"))
+            || (settings.ing2in && s.ends_with("ing"))
+        {
             ret.insert(Cow::Borrowed(&s[0..s.len() - 1]));
         }
 
-        if (settings.ang2an && s.ends_with("an")) ||
-            (settings.eng2en && s.ends_with("en")) ||
-            (settings.ing2in && s.ends_with("in")) {
+        if (settings.ang2an && s.ends_with("an"))
+            || (settings.eng2en && s.ends_with("en"))
+            || (settings.ing2in && s.ends_with("in"))
+        {
             let mut str = s.to_string();
             str.push('g');
             ret.insert(Cow::Owned(str));
         }
 
         Phoneme {
-            strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect()
+            strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect(),
         }
     }
 
-    pub fn strcmp(a: &str, b: &str, a_start: usize) -> usize {
-        let a_graphemes = a.graphemes(true).collect::<Vec<&str>>();
-        let b_graphemes = b.graphemes(true).collect::<Vec<&str>>();
-        let len = min(a_graphemes.len(), b_graphemes.len());
+    pub fn strcmp(a: &SegmentedStr, b: &SegmentedStr, a_start: usize) -> usize {
+        let len = min(a.graphemes.len() - a_start, b.graphemes.len());
         for i in 0..len {
-            if a_graphemes[i + a_start] != b_graphemes[i] {
+            if a.graphemes[i + a_start].1 != b.graphemes[i].1 {
                 return i;
             }
         }
         len
     }
 
-    pub fn match_string_idx(&self, source: &str, idx: IndexSet, start: usize, partial: bool) -> IndexSet {
+    pub fn match_string_idx(
+        &self,
+        source: &str,
+        idx: IndexSet,
+        start: usize,
+        partial: bool,
+    ) -> IndexSet {
         if self.is_empty() {
             return idx;
         }
         let mut ret = IndexSet::default();
-        for i in idx.iter() {
+        idx.for_each(|i| {
             let mut set = self.match_string(source, start + i as usize, partial);
             set.offset(i);
             ret.merge(set);
-        }
+        });
         ret
     }
 
@@ -136,14 +169,21 @@ impl<'a> Phoneme<'a> {
         self.strings.len() == 1 && self.strings[0].is_empty()
     }
 
+    pub fn match_sequence(&self, c: char) -> bool {
+        self.strings.iter().any(|s| s.chars().next().unwrap() == c)
+    }
+
     pub fn match_string(&self, source: &str, start: usize, partial: bool) -> IndexSet {
         let mut ret = IndexSet::default();
-        if self.is_empty() {
+        if self.is_empty() || self.strings.len() == 1 && self.strings[0].trim().is_empty() {
             return ret;
         }
+
+        let source: SegmentedStr = source.into();
         for s in self.strings.iter() {
-            let size = Self::strcmp(source, s, start);
-            if (partial && start + size == source.len()) || size == s.len() {
+            let s = s.as_ref().into();
+            let size = Self::strcmp(&source, &s, start);
+            if (partial && start + size == source.graphemes.len()) || size == s.graphemes.len() {
                 ret.set(size);
             }
         }
@@ -151,38 +191,46 @@ impl<'a> Phoneme<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Character<'a> {
     pub ch: char,
-    pub pinyin: Vec<&'a Pinyin<'a>>
+    pub pinyin: Vec<Rc<Pinyin<'a>>>,
 }
 
 impl<'a> Character<'a> {
-    pub fn new(ch: char, pinyin: Vec<&'a Pinyin<'a>>) -> Self {
-        Character {
-            ch, pinyin
-        }
+    pub fn new(ch: char, pinyin: Vec<Rc<Pinyin<'a>>>) -> Self {
+        Character { ch, pinyin }
     }
 
     pub fn match_str(&self, s: &str, start: usize, partial: bool) -> IndexSet {
-        let mut ret = if s.chars().skip(start).next() == Some(self.ch) { IndexSet::one() } else { IndexSet::none() };
-        self.pinyin.iter().for_each(|p| ret.merge(p.match_string(s, start, partial)));
+        let mut ret = if s.chars().skip(start).next() == Some(self.ch) {
+            IndexSet::one()
+        } else {
+            IndexSet::none()
+        };
+        self.pinyin
+            .iter()
+            .for_each(|p| ret.merge(p.match_string(s, start, partial)));
         ret
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Pinyin<'a> {
     pub raw: &'a str,
     pub id: usize,
     pub duo: bool,
     pub sequence: bool,
-    pub phonemes: Vec<Phoneme<'a>>
+    pub phonemes: Vec<Phoneme<'a>>,
 }
 
 impl<'a> Pinyin<'a> {
     pub fn new(s: &'a str, settings: &FuzzySettings, keyboard: &Keyboard, id: usize) -> Pinyin<'a> {
         let split = keyboard.split(s);
-        let phonemes: Vec<Phoneme> = split.into_iter().map(|x| Phoneme::new_cow(x, settings, keyboard)).collect();
+        let phonemes: Vec<Phoneme> = split
+            .into_iter()
+            .map(|x| Phoneme::new_cow(x, settings, keyboard))
+            .collect();
 
         Pinyin {
             id,
@@ -203,6 +251,9 @@ impl<'a> Pinyin<'a> {
             }
             ret
         } else {
+            // in other keyboards, match of precedent phoneme
+            // is compulsory to match subsequent phonemes
+            // for example, zhong1, z+h+ong+1 cannot match zong or zh1
             let mut active = IndexSet::zero();
             let mut ret = IndexSet::none();
 
@@ -213,11 +264,19 @@ impl<'a> Pinyin<'a> {
                 }
                 ret.merge(active);
             });
+
+            if self.sequence
+                && self.phonemes[0].match_sequence(s.chars().skip(start).next().unwrap())
+            {
+                ret.set(1);
+            }
             ret
         }
     }
 
     pub fn has_initial(s: &str) -> bool {
-        VOWEL_CHARS.iter().all(|x| s.chars().next().map(|c| c != *x).unwrap_or(false))
+        VOWEL_CHARS
+            .iter()
+            .all(|x| s.chars().next().map(|c| c != *x).unwrap_or(false))
     }
 }

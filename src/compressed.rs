@@ -1,10 +1,23 @@
+use std::fmt::{Display, Formatter, Write};
 use std::ops::Index;
-use std::slice::Iter;
+
 use crate::accelerator::CharProvider;
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct IndexSet {
     value: i32,
+}
+
+impl Display for IndexSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        self.for_each(|i| s.push_str(&format!("{}, ", i)));
+
+        if s.is_empty() {
+            s.push('0');
+        }
+        f.write_str(&s)
+    }
 }
 
 impl From<i32> for IndexSet {
@@ -31,9 +44,7 @@ impl IndexSet {
     }
 
     pub fn new(value: i32) -> Self {
-        IndexSet {
-            value
-        }
+        IndexSet { value }
     }
 
     pub fn set(&mut self, index: usize) {
@@ -44,31 +55,36 @@ impl IndexSet {
         self.value & (0x1 << index) != 0
     }
 
-    pub fn for_each<F>(&self, c: F) where F: Fn(i32) -> () {
+    pub fn for_each<F>(&self, mut c: F)
+    where
+        F: FnMut(i32) -> (),
+    {
         let mut v = self.value;
         for i in 0..7 {
             if (v & 0x1) == 0x1 {
                 c(i);
-            }
-            else if v == 0 {
+            } else if v == 0 {
                 return;
             }
             v >>= 1;
         }
     }
 
-    pub fn traverse<F>(&self, p: F) -> bool where F: Fn(i32) -> bool {
+    pub fn traverse<F>(&self, p: F) -> bool
+    where
+        F: Fn(i32) -> bool,
+    {
         let mut v = self.value;
         for i in 0..7 {
-            if (v & 0x1) == 0x1 && !p(i) {
-                return false;
+            if (v & 0x1) == 0x1 && p(i) {
+                return true;
             }
             if v == 0 {
-                return true;
+                return false;
             }
             v >>= 1;
         }
-        true
+        false
     }
 
     pub fn offset(&mut self, i: i32) {
@@ -82,46 +98,16 @@ impl IndexSet {
             self.value |= s.value;
         }
     }
-
-    pub fn iter(&self) -> IndexSetIter {
-        IndexSetIter::new(self.value)
-    }
-}
-
-pub struct IndexSetIter {
-    value: i32,
-    cursor: i32
-}
-
-impl IndexSetIter {
-    pub fn new(value: i32) -> Self {
-        IndexSetIter {
-            value,
-            cursor: 0
-        }
-    }
-}
-
-impl Iterator for IndexSetIter {
-    type Item = i32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if (self.value & 0x1) == 0x1 {
-            self.value >>= 1;
-            return Some(self.cursor);
-        }
-        None
-    }
 }
 
 pub struct IndexSetStorage {
-    data: Vec<i32>
+    data: Vec<i32>,
 }
 
 impl IndexSetStorage {
     pub fn new() -> Self {
         IndexSetStorage {
-            data: Vec::from([0; 16])
+            data: Vec::from([0; 16]),
         }
     }
 
@@ -154,7 +140,7 @@ impl IndexSetStorage {
 #[derive(Default)]
 pub struct Compressor {
     pub chars: Vec<char>,
-    pub offsets: Vec<usize>
+    pub offsets: Vec<usize>,
 }
 
 impl Index<usize> for Compressor {
@@ -179,4 +165,3 @@ impl Compressor {
         self.offsets.last().copied().unwrap_or(0)
     }
 }
-
