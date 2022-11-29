@@ -211,14 +211,14 @@ pub struct Keyboard {
 
 impl Keyboard {
     pub fn keys<'a>(&self, s: &'a str) -> &'a str {
-        *self.keys.and_then(|keys| keys.get(s)).unwrap_or(&s)
+        self.keys.and_then(|keys| keys.get(s)).unwrap_or(&s)
     }
 
     pub fn keys_cow<'a>(&self, s: Cow<'a, str>) -> Cow<'static, str> {
         self.keys
             .and_then(|keys| keys.get(s.as_ref()))
             .map(|x| Cow::Borrowed(*x))
-            .unwrap_or(Cow::Owned(s.into_owned()))
+            .unwrap_or_else(|| Cow::Owned(s.into_owned()))
     }
 
     pub fn split<'a, 'b>(&'a self, s: &'b str) -> Vec<Cow<'b, str>> {
@@ -236,12 +236,12 @@ impl Keyboard {
             }
             (self.cutter)(s)
                 .into_iter()
-                .map(|x| Cow::Borrowed(x))
+                .map(Cow::Borrowed)
                 .collect()
         } else {
             (self.cutter)(s)
                 .into_iter()
-                .map(|x| Cow::Borrowed(x))
+                .map(Cow::Borrowed)
                 .collect()
         }
     }

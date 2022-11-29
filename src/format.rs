@@ -222,7 +222,7 @@ pub fn unicode_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
         s.remove_last_grapheme()
     };
 
-    let offset = if OFFSET.contains(&finale) { 1 } else { 0 };
+    let offset = usize::from(OFFSET.contains(&finale));
     if offset == 1 {
         ret.push_str(finale.first_grapheme());
     }

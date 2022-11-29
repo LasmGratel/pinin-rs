@@ -1,5 +1,6 @@
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Display, Formatter};
 use std::ops::Index;
+use smallvec::SmallVec;
 
 use crate::accelerator::CharProvider;
 
@@ -57,7 +58,7 @@ impl IndexSet {
 
     pub fn for_each<F>(&self, mut c: F)
     where
-        F: FnMut(i32) -> (),
+        F: FnMut(i32),
     {
         let mut v = self.value;
         for i in 0..7 {
@@ -101,13 +102,19 @@ impl IndexSet {
 }
 
 pub struct IndexSetStorage {
-    data: Vec<i32>,
+    data: SmallVec<[i32; 16]>,
+}
+
+impl Default for IndexSetStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IndexSetStorage {
     pub fn new() -> Self {
         IndexSetStorage {
-            data: Vec::from([0; 16]),
+            data: SmallVec::from([0; 16]),
         }
     }
 
@@ -137,7 +144,7 @@ impl IndexSetStorage {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct Compressor {
     pub chars: Vec<char>,
     pub offsets: Vec<usize>,

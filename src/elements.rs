@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
+use compact_str::CompactString;
+use smallvec::SmallVec;
 
 use crate::compressed::IndexSet;
 use crate::keyboard::Keyboard;
@@ -12,19 +14,19 @@ use crate::unicode_utils::SegmentedStr;
 
 const VOWEL_CHARS: [char; 6] = ['a', 'e', 'i', 'o', 'u', 'v'];
 
-#[derive(Hash, PartialEq, Clone)]
-pub struct Phoneme<'a> {
-    strings: Vec<Cow<'a, str>>,
+#[derive(Hash, PartialEq, Clone, Eq)]
+pub struct Phoneme {
+    strings: SmallVec<[CompactString; 4]>,
 }
 
-impl Debug for Phoneme<'_> {
+impl Debug for Phoneme {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.strings.iter()).finish()
     }
 }
 
-impl<'a> Phoneme<'a> {
-    pub fn new(s: &'a str, settings: &FuzzySettings, keyboard: &Keyboard) -> Self {
+impl Phoneme {
+    pub fn new(s: &str, settings: &FuzzySettings, keyboard: &Keyboard) -> Self {
         let mut ret = HashSet::new();
         ret.insert(Cow::Borrowed(s));
 
@@ -76,10 +78,10 @@ impl<'a> Phoneme<'a> {
         }
 
         Phoneme {
-            strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect(),
+            strings: ret.into_iter().map(|x| keyboard.keys_cow(x).into()).collect(),
         }
     }
-
+/*
     pub fn new_cow(s: Cow<'a, str>, settings: &FuzzySettings, keyboard: &Keyboard) -> Self {
         let mut ret = HashSet::new();
         ret.insert(s.clone());
@@ -135,7 +137,7 @@ impl<'a> Phoneme<'a> {
             strings: ret.into_iter().map(|x| keyboard.keys_cow(x)).collect(),
         }
     }
-
+*/
     pub fn strcmp(a: &SegmentedStr, b: &SegmentedStr, a_start: usize) -> usize {
         let len = min(a.graphemes.len() - a_start, b.graphemes.len());
         for i in 0..len {
@@ -181,7 +183,7 @@ impl<'a> Phoneme<'a> {
 
         let source: SegmentedStr = source.into();
         for s in self.strings.iter() {
-            let s = s.as_ref().into();
+            let s = s.as_str().into();
             let size = Self::strcmp(&source, &s, start);
             if (partial && start + size == source.graphemes.len()) || size == s.graphemes.len() {
                 ret.set(size);
@@ -203,7 +205,7 @@ impl<'a> Character<'a> {
     }
 
     pub fn match_str(&self, s: &str, start: usize, partial: bool) -> IndexSet {
-        let mut ret = if s.chars().skip(start).next() == Some(self.ch) {
+        let mut ret = if s.chars().nth(start) == Some(self.ch) {
             IndexSet::one()
         } else {
             IndexSet::none()
@@ -221,7 +223,7 @@ pub struct Pinyin<'a> {
     pub id: usize,
     pub duo: bool,
     pub sequence: bool,
-    pub phonemes: Vec<Phoneme<'a>>,
+    pub phonemes: Vec<Phoneme>,
 }
 
 impl<'a> Pinyin<'a> {
@@ -229,7 +231,7 @@ impl<'a> Pinyin<'a> {
         let split = keyboard.split(s);
         let phonemes: Vec<Phoneme> = split
             .into_iter()
-            .map(|x| Phoneme::new_cow(x, settings, keyboard))
+            .map(|x| Phoneme::new(&x, settings, keyboard))
             .collect();
 
         Pinyin {
@@ -266,7 +268,7 @@ impl<'a> Pinyin<'a> {
             });
 
             if self.sequence
-                && self.phonemes[0].match_sequence(s.chars().skip(start).next().unwrap())
+                && self.phonemes[0].match_sequence(s.chars().nth(start).unwrap())
             {
                 ret.set(1);
             }

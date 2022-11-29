@@ -91,6 +91,6 @@ impl<'a> UnicodeUtils<'a> for str {
             return temp;
         }
 
-        return &self[begin..end + temp.len()];
+        &self[begin..end + temp.len()]
     }
 }

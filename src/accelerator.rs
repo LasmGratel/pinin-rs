@@ -39,49 +39,56 @@ impl CharProvider for StringProvider {
 pub struct Accelerator {
     cache: Rc<RefCell<Vec<IndexSetStorage>>>,
 
-    search_chars: Vec<char>,
-    pub search_string: String,
-    pub provider: Option<Box<dyn CharProvider>>,
+    search_chars: RefCell<Vec<char>>,
+    pub search_string: RefCell<String>,
+    pub provider: RefCell<Option<Rc<RefCell<dyn CharProvider>>>>,
 
     partial: Cell<bool>,
+}
+
+impl Default for Accelerator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Accelerator {
     pub fn new() -> Self {
         Accelerator {
             cache: Rc::new(RefCell::new(vec![])),
-            search_chars: vec![],
-            search_string: "".to_string(),
-            provider: None,
+            search_chars: RefCell::new(vec![]),
+            search_string: RefCell::new("".to_string()),
+            provider: RefCell::new(None),
             partial: Cell::new(false),
         }
     }
 
-    pub fn matches(&self, offset: usize, start: usize) -> bool {
+    pub fn matches(&self, context: &PinIn, offset: usize, start: usize) -> bool {
         if self.partial.get() {
             self.partial.set(false);
             self.reset();
         }
-        self.check(offset, start)
+        self.check(context, offset, start)
     }
 
-    pub fn begins(&self, offset: usize, start: usize) -> bool {
-        if self.partial.get() {
+    pub fn begins(&self, context: &PinIn, offset: usize, start: usize) -> bool {
+        if !self.partial.get() {
             self.partial.set(true);
             self.reset();
         }
-        self.check(offset, start)
+        self.check(context, offset, start)
     }
 
-    pub fn contains(&self, offset: usize, start: usize) -> bool {
-        if self.partial.get() {
+    pub fn contains(&self, context: &PinIn, offset: usize, start: usize) -> bool {
+        if !self.partial.get() {
             self.partial.set(true);
             self.reset();
         }
-        if let Some(provider) = &self.provider {
+        if let Some(provider) = self.provider.borrow().as_ref() {
+            let provider = provider.borrow();
             let mut i = start;
             while !provider.end(i) {
-                if self.check(offset, i) {
+                if self.check(context, offset, i) {
                     return true;
                 }
 
@@ -92,7 +99,8 @@ impl Accelerator {
     }
 
     pub fn common(&self, s1: usize, s2: usize, max: usize) -> usize {
-        if let Some(provider) = &self.provider {
+        if let Some(provider) = self.provider.borrow().as_ref() {
+            let provider = provider.borrow();
             let mut i = 0;
             loop {
                 if i >= max {
@@ -111,10 +119,10 @@ impl Accelerator {
         0
     }
 
-    pub fn search(&mut self, s: &str) {
-        if &self.search_string != s {
-            self.search_string = s.to_string();
-            self.search_chars = s.chars().collect();
+    pub fn search(&self, s: &str) {
+        if self.search_string.borrow().as_str() != s {
+            *self.search_string.borrow_mut() = s.to_string();
+            *self.search_chars.borrow_mut() = s.chars().collect();
             self.reset();
         }
     }
@@ -125,7 +133,7 @@ impl Accelerator {
 
     pub fn get(&self, context: &PinIn, ch: char, offset: usize) -> IndexSet {
         let c = context.get_character(ch);
-        let mut ret = if self.search_chars[offset] == c.ch {
+        let mut ret = if self.search_chars.borrow()[offset] == c.ch {
             IndexSet::one()
         } else {
             IndexSet::none()
@@ -138,28 +146,37 @@ impl Accelerator {
 
     pub fn get_pinyin(&self, p: &Pinyin, offset: usize) -> IndexSet {
         let mut cache = self.cache.borrow_mut();
-        for _ in cache.len()..offset {
-            cache.push(IndexSetStorage::new());
-        }
+        cache.resize_with(offset + 1, || IndexSetStorage::new());
         let data = &mut cache[offset];
         let ret = data.get(p.id);
         if ret != IndexSet::null() {
             return ret;
         }
 
-        let set = p.match_string(&self.search_string, offset, self.partial.get());
+        let set = p.match_string(self.search_string.borrow().as_str(), offset, self.partial.get());
         data.set(set, p.id);
         set
     }
 
-    pub fn check(&self, offset: usize, start: usize) -> bool {
-        if let Some(provider) = &self.provider {
-            if offset == self.search_string.chars().count() {
+    pub fn check(&self, context: &PinIn, offset: usize, start: usize) -> bool {
+        if let Some(provider) = self.provider.borrow().as_ref() {
+            let provider = provider.borrow();
+            if offset == self.search_string.borrow().chars().count() {
                 return self.partial.get() || provider.end(start);
             }
 
             if provider.end(start) {
                 return false;
+            }
+
+            let s = self.get(context, provider[start], offset);
+            println!("match result: {}", s);
+
+            return if provider.end(start + 1) {
+                let i = self.search_string.borrow().chars().count() - offset;
+                s.get(i)
+            } else {
+                s.traverse(|i| self.check(context, offset + i as usize, start + 1))
             }
         }
 
