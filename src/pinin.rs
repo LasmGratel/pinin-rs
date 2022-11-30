@@ -40,6 +40,12 @@ impl Default for PinIn<'_> {
     }
 }
 
+impl PinIn<'static> {
+    pub fn load_default_dict(&mut self) {
+        self.load_dict(Box::new(include_str!("dict.txt")));
+    }
+}
+
 impl<'a> PinIn<'a> {
     pub fn new() -> PinIn<'a> {
         let mut p = PinIn {
@@ -122,7 +128,7 @@ impl<'a> PinIn<'a> {
             };
         }
 
-        let mut a = self.accelerator.as_ref().unwrap().as_ref();
+        let a = self.accelerator.as_ref().unwrap().as_ref();
         *a.provider.borrow_mut() = Some(Rc::new(RefCell::new(StringProvider::from(s1))));
         a.search(s2);
         a.contains(self, 0, 0)

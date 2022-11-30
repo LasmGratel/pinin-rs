@@ -28,34 +28,42 @@ impl From<i32> for IndexSet {
 }
 
 impl IndexSet {
+    #[inline]
     pub fn zero() -> Self {
         Self::from(0x1)
     }
 
+    #[inline]
     pub fn one() -> Self {
         Self::from(0x2)
     }
 
+    #[inline]
     pub fn none() -> Self {
         Self::from(0x0)
     }
 
+    #[inline]
     pub fn null() -> Self {
         Self::from(-1)
     }
 
+    #[inline]
     pub fn new(value: i32) -> Self {
         IndexSet { value }
     }
 
+    #[inline]
     pub fn set(&mut self, index: usize) {
         self.value |= 0x1 << index;
     }
 
+    #[inline]
     pub fn get(&self, index: usize) -> bool {
         self.value & (0x1 << index) != 0
     }
 
+    #[inline]
     pub fn for_each<F>(&self, mut c: F)
     where
         F: FnMut(i32),
@@ -71,6 +79,7 @@ impl IndexSet {
         }
     }
 
+    #[inline]
     pub fn traverse<F>(&self, p: F) -> bool
     where
         F: Fn(i32) -> bool,
@@ -88,10 +97,12 @@ impl IndexSet {
         false
     }
 
+    #[inline]
     pub fn offset(&mut self, i: i32) {
         self.value <<= i;
     }
 
+    #[inline]
     pub fn merge(&mut self, s: Self) {
         if self.value == 0x1 {
             self.value = s.value;
@@ -118,6 +129,7 @@ impl IndexSetStorage {
         }
     }
 
+    #[inline]
     pub fn set(&mut self, set: IndexSet, index: usize) {
         if index >= self.data.len() {
             let mut size = index;
@@ -131,6 +143,7 @@ impl IndexSetStorage {
         self.data[index] = set.value + 1;
     }
 
+    #[inline]
     pub fn get(&self, index: usize) -> IndexSet {
         if let Some(ret) = self.data.get(index) {
             if *ret != 0 {
@@ -153,18 +166,21 @@ pub struct Compressor {
 impl Index<usize> for Compressor {
     type Output = char;
 
+    #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         &self.chars[index]
     }
 }
 
 impl CharProvider for Compressor {
+    #[inline]
     fn end(&self, index: usize) -> bool {
         self.chars.get(index) == Some(&'\0')
     }
 }
 
 impl Compressor {
+    #[inline]
     pub fn push(&mut self, s: &str) -> usize {
         self.offsets.push(self.chars.len());
         s.chars().for_each(|c| self.chars.push(c));

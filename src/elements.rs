@@ -14,7 +14,7 @@ use crate::unicode_utils::SegmentedStr;
 
 const VOWEL_CHARS: [char; 6] = ['a', 'e', 'i', 'o', 'u', 'v'];
 
-#[derive(Hash, PartialEq, Clone, Eq)]
+#[derive(Hash, PartialEq, Clone, Eq, PartialOrd, Ord)]
 pub struct Phoneme {
     strings: SmallVec<[CompactString; 4]>,
 }
@@ -223,13 +223,13 @@ pub struct Pinyin<'a> {
     pub id: usize,
     pub duo: bool,
     pub sequence: bool,
-    pub phonemes: Vec<Phoneme>,
+    pub phonemes: SmallVec<[Phoneme; 4]>,
 }
 
 impl<'a> Pinyin<'a> {
     pub fn new(s: &'a str, settings: &FuzzySettings, keyboard: &Keyboard, id: usize) -> Pinyin<'a> {
         let split = keyboard.split(s);
-        let phonemes: Vec<Phoneme> = split
+        let phonemes: SmallVec<[Phoneme; 4]> = split
             .into_iter()
             .map(|x| Phoneme::new(&x, settings, keyboard))
             .collect();

@@ -17,3 +17,8 @@ pretty_assertions = "1"
 env_logger = "*"
 log = "*"
 measure_time = "*"
+criterion = "0.4"
+
+[[bench]]
+name = "minecraft"
+harness = false

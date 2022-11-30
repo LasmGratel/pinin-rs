@@ -146,7 +146,7 @@ impl Accelerator {
 
     pub fn get_pinyin(&self, p: &Pinyin, offset: usize) -> IndexSet {
         let mut cache = self.cache.borrow_mut();
-        cache.resize_with(offset + 1, || IndexSetStorage::new());
+        cache.resize_with(offset + 1, IndexSetStorage::new);
         let data = &mut cache[offset];
         let ret = data.get(p.id);
         if ret != IndexSet::null() {
@@ -170,7 +170,6 @@ impl Accelerator {
             }
 
             let s = self.get(context, provider[start], offset);
-            println!("match result: {}", s);
 
             return if provider.end(start + 1) {
                 let i = self.search_string.borrow().chars().count() - offset;

@@ -204,7 +204,7 @@ lazy_static! {
 pub struct Keyboard {
     local: Option<&'static HashMap<&'static str, &'static str>>,
     keys: Option<&'static HashMap<&'static str, &'static str>>,
-    cutter: fn(&str) -> Vec<&str>,
+    cutter: fn(&str) -> SmallVec<[&str; 4]>,
     pub duo: bool,
     pub sequence: bool,
 }
@@ -221,7 +221,7 @@ impl Keyboard {
             .unwrap_or_else(|| Cow::Owned(s.into_owned()))
     }
 
-    pub fn split<'a, 'b>(&'a self, s: &'b str) -> Vec<Cow<'b, str>> {
+    pub fn split<'a, 'b>(&'a self, s: &'b str) -> SmallVec<[Cow<'b, str>; 6]> {
         if let Some(local) = self.local {
             let s = s;
 
@@ -247,9 +247,9 @@ impl Keyboard {
     }
 }
 
-fn standard_cutter<'a>(s: &'a str) -> Vec<&'a str> {
+fn standard_cutter<'a>(s: &'a str) -> SmallVec<[&'a str; 4]> {
     let mut cursor = 0usize;
-    let mut ret: Vec<&'a str> = vec![];
+    let mut ret = SmallVec::new();
     let graphemes: SmallVec<[(usize, &'a str); 7]> = s.grapheme_indices(true).collect();
     if Pinyin::has_initial(s) {
         cursor = if graphemes.len() > 2 && graphemes[1].1 == "h" {
@@ -269,7 +269,7 @@ fn standard_cutter<'a>(s: &'a str) -> Vec<&'a str> {
     ret
 }
 
-fn zero_cutter(s: &str) -> Vec<&str> {
+fn zero_cutter(s: &str) -> SmallVec<[&str; 4]> {
     let mut ss = standard_cutter(s);
     if ss.len() != 2 {
         return ss;
