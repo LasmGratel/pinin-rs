@@ -10,7 +10,10 @@ unicode-segmentation = "1.8.0"
 lazy_static = "1"
 smallvec = "1"
 compact_str = "*"
+rustc-hash = "1"
 #moka = "0.9"
+
+mimalloc = { version = "*", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "1"

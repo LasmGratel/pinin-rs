@@ -5,12 +5,14 @@ use crate::format::{number_format, PinyinFormat};
 use crate::keyboard::{Keyboard, KEYBOARD_QUANPIN};
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use rustc_hash::FxHashMap;
+
+type HashMap<K, V> = FxHashMap<K, V>;
 
 pub struct PinIn<'a> {
-    pub(crate) chars: HashMap<char, Option<Character<'a>>>,
+    pub(crate) chars: HashMap<char, Option<Character>>,
 
     pub keyboard: &'static Keyboard,
     pub fuzzy: FuzzySettings,
@@ -18,7 +20,7 @@ pub struct PinIn<'a> {
     pub accelerate: bool,
     pub accelerator: Option<Rc<Accelerator>>,
 
-    pub(crate) pinyins: Rc<RefCell<HashMap<&'a str, Rc<Pinyin<'a>>>>>,
+    pub(crate) pinyins: Rc<RefCell<HashMap<&'a str, Pinyin>>>,
 
     total: AtomicUsize,
 }
@@ -49,14 +51,13 @@ impl PinIn<'static> {
 impl<'a> PinIn<'a> {
     pub fn new() -> PinIn<'a> {
         let mut p = PinIn {
-            chars: HashMap::new(),
+            chars: Default::default(),
             keyboard: &KEYBOARD_QUANPIN,
             fuzzy: FuzzySettings::default(),
             format: Box::new(number_format),
             accelerate: false,
             accelerator: None,
-
-            pinyins: Rc::new(RefCell::new(HashMap::new())),
+            pinyins: Rc::new(RefCell::new(Default::default())),
             total: AtomicUsize::default(),
         };
         p.accelerator = Some(Rc::new(Accelerator::new()));
@@ -64,17 +65,17 @@ impl<'a> PinIn<'a> {
         p
     }
 
-    pub fn get_or_insert_pinyin(&self, x: &'a str) -> Rc<Pinyin<'a>> {
+    pub fn get_or_insert_pinyin(&self, x: &'a str) -> Pinyin {
         self.pinyins
             .as_ref()
             .borrow_mut()
             .entry(x)
-            .or_insert_with(|| Rc::new(Pinyin::new(
+            .or_insert_with(|| Pinyin::new(
                 x,
                 &self.fuzzy,
                 self.keyboard,
                 self.total.fetch_add(1, Ordering::SeqCst),
-            )))
+            ))
             .clone()
     }
 
@@ -94,11 +95,11 @@ impl<'a> PinIn<'a> {
         });
     }
 
-    pub fn get_character(&self, c: char) -> Cow<Character<'a>> {
+    pub fn get_character(&self, c: char) -> Cow<Character> {
         self.chars
             .get(&c)
             .and_then(|x| x.as_ref().map(Cow::Borrowed))
-            .unwrap_or_else(|| Cow::Owned(Character::new(c, vec![])))
+            .unwrap_or_else(|| Cow::Owned(Character::new(c, Default::default())))
     }
 
     pub fn check(&self, s1: &str, start1: usize, s2: &str, start2: usize, partial: bool) -> bool {

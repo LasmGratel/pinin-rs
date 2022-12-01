@@ -4,6 +4,7 @@ use crate::pinin::PinIn;
 use std::cell::{Cell, RefCell};
 use std::ops::Index;
 use std::rc::Rc;
+use compact_str::CompactString;
 
 pub trait CharProvider: Index<usize, Output = char> {
     fn end(&self, index: usize) -> bool;
@@ -40,7 +41,7 @@ pub struct Accelerator {
     cache: Rc<RefCell<Vec<IndexSetStorage>>>,
 
     search_chars: RefCell<Vec<char>>,
-    pub search_string: RefCell<String>,
+    pub search_string: RefCell<CompactString>,
     pub provider: RefCell<Option<Rc<RefCell<dyn CharProvider>>>>,
 
     partial: Cell<bool>,
@@ -55,9 +56,9 @@ impl Default for Accelerator {
 impl Accelerator {
     pub fn new() -> Self {
         Accelerator {
-            cache: Rc::new(RefCell::new(vec![])),
-            search_chars: RefCell::new(vec![]),
-            search_string: RefCell::new("".to_string()),
+            cache: Rc::new(RefCell::new(Default::default())),
+            search_chars: RefCell::new(Default::default()),
+            search_string: RefCell::new("".into()),
             provider: RefCell::new(None),
             partial: Cell::new(false),
         }
@@ -121,7 +122,7 @@ impl Accelerator {
 
     pub fn search(&self, s: &str) {
         if self.search_string.borrow().as_str() != s {
-            *self.search_string.borrow_mut() = s.to_string();
+            *self.search_string.borrow_mut() = s.into();
             *self.search_chars.borrow_mut() = s.chars().collect();
             self.reset();
         }
@@ -133,7 +134,7 @@ impl Accelerator {
 
     pub fn get(&self, context: &PinIn, ch: char, offset: usize) -> IndexSet {
         let c = context.get_character(ch);
-        let mut ret = if self.search_chars.borrow()[offset] == c.ch {
+        let mut ret = if self.search_chars.borrow()[offset] == ch {
             IndexSet::one()
         } else {
             IndexSet::none()

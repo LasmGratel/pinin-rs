@@ -2,10 +2,12 @@ use std::cell::{Cell, RefCell};
 use crate::accelerator::{Accelerator, CharProvider};
 use crate::compressed::{Compressor, IndexSet};
 use crate::pinin::PinIn;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::hash::Hash;
 use std::marker::PhantomData;
+use std::ptr::NonNull;
 use std::rc::Rc;
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{Array, SmallVec};
 
 use crate::elements::{Phoneme, Pinyin};
@@ -94,7 +96,7 @@ impl<T> SimpleSearcher<T> {
 
 }
 
-const BTREE_THRESHOLD: usize = 256;
+const BTREE_THRESHOLD: usize = 1024;
 
 pub trait Node<T> where T: 'static {
     fn get_offset(&self, context: &PinIn, p: &TreeSearcher<T>, ret: &mut dyn Collection<usize>, offset: usize);
@@ -116,11 +118,6 @@ pub struct TreeSearcher<T> where T: 'static {
 }
 
 impl<T> Searcher<T> for TreeSearcher<T> where T: 'static {
-    fn reset(&mut self, context: &PinIn) {
-        self.naccs.borrow().iter().for_each(|i| i.reload(context));
-        self.accelerator.reset();
-    }
-
     fn insert(&mut self, context: &PinIn, name: &str, id: T) {
         let pos = self.compressor.borrow_mut().push(name);
         let end = if self.logic == SearcherLogic::Contain { name.chars().count() } else { 1 };
@@ -133,9 +130,14 @@ impl<T> Searcher<T> for TreeSearcher<T> where T: 'static {
 
     fn search(&self, context: &PinIn, s: &str) -> Vec<&T> {
         self.accelerator.search(s);
-        let mut ret: SmallVec<[usize; 16]> = SmallVec::new();
+        let mut ret: HashSet<usize> = Default::default();
         self.root.get_offset(context, self, &mut ret, 0);
-        ret.into_iter().collect::<HashSet<_>>().into_iter().map(|i| &self.objects[i]).collect()
+        ret.into_iter().map(|i| &self.objects[i]).collect()
+    }
+
+    fn reset(&mut self, context: &PinIn) {
+        self.naccs.borrow().iter().for_each(|i| i.reload(context));
+        self.accelerator.reset();
     }
 }
 
@@ -158,9 +160,9 @@ impl<T> TreeSearcher<T> where T: 'static {
 pub struct NMap<T> where T: 'static {
 
     #[allow(clippy::type_complexity)]
-    children: RefCell<Option<HashMap<char, Rc<dyn Node<T>>>>>,
+    children: RefCell<Option<FxHashMap<char, Rc<dyn Node<T>>>>>,
 
-    leaves: RefCell<HashSet<usize>>,
+    leaves: RefCell<FxHashSet<usize>>,
 }
 
 impl<T> Default for NMap<T> {
@@ -243,7 +245,7 @@ impl<T> Node<T> for NMap<T> {
 
 pub struct NAcc<T> where T: 'static {
     map: Rc<NMap<T>>,
-    index: RefCell<HashMap<Phoneme, HashSet<char>>>,
+    index: RefCell<FxHashMap<Phoneme, FxHashSet<char>>>,
 }
 
 impl<T> NAcc<T> where T: 'static {
@@ -262,18 +264,17 @@ impl<T> NAcc<T> where T: 'static {
     fn index(&self, context: &PinIn, c: char) {
         let ch = context.get_character(c);
 
-        ch.pinyin.iter().for_each(|py: &Rc<Pinyin>| {
-            let key = &py.phonemes[0];
-            let mut index = self.index.borrow_mut();
-            if let Some(_value) = index.get(key) {
-                //if value.len() >= BTREE_THRESHOLD && !value.contains(&c) {
-                    // _index[key] = new HashSet<char>(value); // Should be CharOpenHashSet
-                //}
-            } else {
-                index.insert(key.clone(), HashSet::new());
-            }
+        let mut index = self.index.borrow_mut();
 
-            index.get_mut(key).unwrap().insert(c);
+        ch.pinyin.iter().for_each(|py: &Pinyin| {
+            let key = &py.phonemes[0];
+            if let Some(set) = index.get_mut(&key) {
+                set.insert(c);
+            } else {
+                let mut set = FxHashSet::default();
+                set.insert(c);
+                index.insert(key.clone(), set);
+            }
         });
     }
 
@@ -334,7 +335,7 @@ impl<T: 'static> Node<T> for NAcc<T> {
 
 #[derive(Debug)]
 pub struct NDense<T> {
-    data: RefCell<Vec<usize>>,
+    data: RefCell<SmallVec<[usize; 32]>>,
     phantom: PhantomData<T>,
 }
 
@@ -381,12 +382,15 @@ impl<T> Node<T> for NDense<T> where T: 'static {
 
     fn put(self: Rc<Self>, context: &PinIn, p: &TreeSearcher<T>, name: usize, id: usize) -> Rc<dyn Node<T>> {
         if self.data.borrow().len() >= BTREE_THRESHOLD {
+            //let time = std::time::Instant::now();
             let pattern = self.data.borrow()[0];
             let ret = Rc::new(NSlice::new(pattern, pattern + self.match_tree(p)));
             for j in 0..self.data.borrow().len() / 2 {
                 ret.clone().put(context, p, self.data.borrow()[j * 2], self.data.borrow()[j * 2 + 1]);
             }
             ret.clone().put(context, p, name, id);
+
+           //println!("convert to tree took {:?}", std::time::Instant::now() - time);
             ret
         } else {
             self.data.borrow_mut().push(name);

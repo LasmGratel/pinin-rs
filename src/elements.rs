@@ -5,6 +5,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 use compact_str::CompactString;
+use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
 use crate::compressed::IndexSet;
@@ -15,19 +16,27 @@ use crate::unicode_utils::SegmentedStr;
 const VOWEL_CHARS: [char; 6] = ['a', 'e', 'i', 'o', 'u', 'v'];
 
 #[derive(Hash, PartialEq, Clone, Eq, PartialOrd, Ord)]
-pub struct Phoneme {
-    strings: SmallVec<[CompactString; 4]>,
+pub enum Phoneme {
+    Single(CompactString),
+    Multiple(Vec<CompactString>),
 }
 
 impl Debug for Phoneme {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_list().entries(self.strings.iter()).finish()
+        match &self {
+            Phoneme::Single(x) => {
+                f.write_str(x)
+            }
+            Phoneme::Multiple(strings) => {
+                f.debug_list().entries(strings.iter()).finish()
+            }
+        }
     }
 }
 
 impl Phoneme {
     pub fn new(s: &str, settings: &FuzzySettings, keyboard: &Keyboard) -> Self {
-        let mut ret = HashSet::new();
+        let mut ret = FxHashSet::default();
         ret.insert(Cow::Borrowed(s));
 
         if let Some(c) = s.chars().next() {
@@ -77,8 +86,10 @@ impl Phoneme {
             ret.insert(Cow::Owned(str));
         }
 
-        Phoneme {
-            strings: ret.into_iter().map(|x| keyboard.keys_cow(x).into()).collect(),
+        if ret.len() == 1 {
+            Phoneme::Single(keyboard.keys(s).into())
+        } else {
+            Phoneme::Multiple(ret.into_iter().map(|x| keyboard.keys_cow(x).into()).collect())
         }
     }
 /*
@@ -168,39 +179,58 @@ impl Phoneme {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.strings.len() == 1 && self.strings[0].is_empty()
+        match &self {
+            Phoneme::Single(s) => { s.is_empty() }
+            Phoneme::Multiple(_) => { false }
+        }
     }
 
     pub fn match_sequence(&self, c: char) -> bool {
-        self.strings.iter().any(|s| s.chars().next().unwrap() == c)
+        match &self {
+            Phoneme::Single(s) => { s.chars().next().unwrap() == c }
+            Phoneme::Multiple(strings) => { strings.iter().any(|s| s.chars().next().unwrap() == c) }
+        }
     }
 
     pub fn match_string(&self, source: &str, start: usize, partial: bool) -> IndexSet {
         let mut ret = IndexSet::default();
-        if self.is_empty() || self.strings.len() == 1 && self.strings[0].trim().is_empty() {
-            return ret;
-        }
 
         let source: SegmentedStr = source.into();
-        for s in self.strings.iter() {
-            let s = s.as_str().into();
-            let size = Self::strcmp(&source, &s, start);
-            if (partial && start + size == source.graphemes.len()) || size == s.graphemes.len() {
-                ret.set(size);
+        match &self {
+            Phoneme::Single(s) => {
+                if s.trim().is_empty() {
+                    return ret;
+                }
+
+                let s = s.as_str().into();
+                let size = Self::strcmp(&source, &s, start);
+                if (partial && start + size == source.graphemes.len()) || size == s.graphemes.len() {
+                    ret.set(size);
+                }
+            }
+            Phoneme::Multiple(strings) => {
+                for s in strings.iter() {
+                    let s = s.as_str().into();
+                    let size = Self::strcmp(&source, &s, start);
+                    if (partial && start + size == source.graphemes.len()) || size == s.graphemes.len() {
+                        ret.set(size);
+                    }
+                }
             }
         }
+
         ret
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Character<'a> {
+pub struct Character {
     pub ch: char,
-    pub pinyin: Vec<Rc<Pinyin<'a>>>,
+    pub pinyin: SmallVec<[Pinyin; 4]>,
 }
 
-impl<'a> Character<'a> {
-    pub fn new(ch: char, pinyin: Vec<Rc<Pinyin<'a>>>) -> Self {
+impl Character {
+    pub fn new(ch: char, pinyin: SmallVec<[Pinyin; 4]>) -> Self {
         Character { ch, pinyin }
     }
 
@@ -218,16 +248,16 @@ impl<'a> Character<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Pinyin<'a> {
-    pub raw: &'a str,
+pub struct Pinyin {
+    pub raw: CompactString,
     pub id: usize,
     pub duo: bool,
     pub sequence: bool,
     pub phonemes: SmallVec<[Phoneme; 4]>,
 }
 
-impl<'a> Pinyin<'a> {
-    pub fn new(s: &'a str, settings: &FuzzySettings, keyboard: &Keyboard, id: usize) -> Pinyin<'a> {
+impl Pinyin {
+    pub fn new(s: &str, settings: &FuzzySettings, keyboard: &Keyboard, id: usize) -> Pinyin {
         let split = keyboard.split(s);
         let phonemes: SmallVec<[Phoneme; 4]> = split
             .into_iter()
@@ -237,7 +267,7 @@ impl<'a> Pinyin<'a> {
         Pinyin {
             id,
             phonemes,
-            raw: s,
+            raw: s.into(),
             duo: keyboard.duo,
             sequence: keyboard.sequence,
         }

@@ -1,5 +1,10 @@
 #![allow(dead_code)]
 
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 pub mod accelerator;
 pub mod cache;
 pub mod compressed;
@@ -13,6 +18,7 @@ pub mod unicode_utils;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::rc::Rc;
     use crate::format::{number_format, phonetic_format, raw_format, unicode_format};
     use crate::keyboard::{KEYBOARD_DAQIAN, KEYBOARD_XIAOHE, KEYBOARD_ZIRANMA};
@@ -99,7 +105,7 @@ mod tests {
         pinin.load_dict(Box::new(include_str!("dict.txt")));
 
         let ch = pinin.chars[&'圆'].as_ref().unwrap();
-        let py = &*ch.pinyin[0];
+        let py = &ch.pinyin[0];
 
         assert_str_eq!(number_format(py), "yuan2");
         assert_str_eq!(raw_format(py), "yuan");
@@ -157,9 +163,10 @@ mod tests {
             pretty_assertions::assert_eq!(list.len(), 0);
         });
     }
-/*
+
     #[test]
     pub fn dataset() {
+
         const SMALL: &str = include_str!("../benches/small");
         const LARGE: &str = include_str!("../benches/small");
 
@@ -172,13 +179,15 @@ mod tests {
 
         let mut searcher = TreeSearcher::new(SearcherLogic::Begin, context.accelerator.clone().unwrap());
 
+        let lines: Vec<_> = SMALL.lines().collect();
+
         {
             let time = std::time::Instant::now();
-            LARGE.lines().enumerate().for_each(|(i, s)| {
+            lines.iter().enumerate().for_each(|(i, s)| {
                 searcher.insert(&context, s, i);
             });
             println!("build tree {:?}", std::time::Instant::now() - time);
         }
     }
- */
+
 }

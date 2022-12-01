@@ -162,7 +162,7 @@ pub fn raw_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
 }
 
 pub fn number_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
-    Cow::Borrowed(p.raw)
+    Cow::Borrowed(p.raw.as_str())
 }
 
 pub fn phonetic_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
@@ -206,7 +206,7 @@ pub fn phonetic_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
 }
 
 pub fn unicode_format<'a>(p: &'a Pinyin) -> Cow<'a, str> {
-    let s = p.raw;
+    let s = p.raw.as_str();
     let len = s.graphemes(true).count();
     let mut ret = String::new();
 

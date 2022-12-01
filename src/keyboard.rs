@@ -221,7 +221,7 @@ impl Keyboard {
             .unwrap_or_else(|| Cow::Owned(s.into_owned()))
     }
 
-    pub fn split<'a, 'b>(&'a self, s: &'b str) -> SmallVec<[Cow<'b, str>; 6]> {
+    pub fn split<'a, 'b>(&'a self, s: &'b str) -> SmallVec<[Cow<'b, str>; 4]> {
         if let Some(local) = self.local {
             let s = s;
 
